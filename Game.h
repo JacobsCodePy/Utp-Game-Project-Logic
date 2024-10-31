@@ -6,17 +6,11 @@
 #define UTP_GAME_PROJECT_LOGIC_GAME_H
 
 #include <vector>
-#include "PathTree.h"
 
 // Contains whole game state management
 class Game {
 
 public:
-
-    // Contains overall game settings
-    struct Settings {
-        bool isBoardInverted = false;
-    };
 
     // Represents a single game tile
     enum class Tile {
@@ -37,55 +31,59 @@ public:
         std::string message; // Description of an error if such occurred
     };
 
-    // Initializes the checker's board with given size as side size of the board.
-    Game(Settings & settings, int size);
+    ////////////////////////////////////
+    ////////////////////////////////////
 
-    // Fills the board with the tiles in the correct positions.
-    void fill(Tile pawn, std::vector<int> const & range);
+    [[nodiscard]] bool isSingleMoveForward(std::pair<int, int> const & displacement) const;
+    [[nodiscard]] bool isQueenTransformation(std::pair<int, int> const & to) const;
+    [[nodiscard]] bool isFree(std::pair<int, int> const & position) const;
+    [[nodiscard]] bool isPawnWhite(Tile tile) const;
+    [[nodiscard]] bool isPawnBlack(Tile tile) const;
+    [[nodiscard]] bool hasPosition(std::pair<int, int> where) const;
 
-    bool isSingleMoveForward(std::pair<int, int> const & displacement) const;
-    bool isQueenTransformation(std::pair<int, int> const & to) const;
-    bool isFree(std::pair<int, int> const & position) const;
-    bool isPawnWhite(Tile tile) const;
-    bool isPawnBlack(Tile tile) const;
-    bool hasPosition(std::pair<int, int> where) const;
+    [[nodiscard]] Tile getCurrentQueen() const;
+    [[nodiscard]] Tile const & get (std::pair<int, int> const & where) const;
+    [[nodiscard]] Player getPawnColor(std::pair<int, int> const & position) const;
+    [[nodiscard]] Player getCurrentPlayer() const;
+    [[nodiscard]] Player getOpponent() const;
 
-    Game::Tile getCurrentPawn() const;
-    Game::Tile getCurrentQueen() const;
+    [[nodiscard]] int getWhitePawnsAmount() const;
+    [[nodiscard]] int getBlackPawnsAmount() const;
 
-    std::pair<int, int> getRelativeDisplacement(std::pair<int, int> from, std::pair<int, int> to) const;
-    Game::Player getPawnColor(std::pair<int, int> const & position) const;
+    ////////////////////////////////////
+    ////////////////////////////////////
 
+    Game();
+    Game(std::vector<Game::Tile> const &state, Player const& currentPlayer);
+    MoveResult process(std::pair<int, int> const & from, std::pair<int, int> const & to);
     void processPawn(MoveResult & result, std::pair<int, int> const & from, std::pair<int, int> const & to) const;
     void processQueen(MoveResult & result, std::pair<int, int> const & from, std::pair<int, int> const & to) const;
-
-    MoveResult process(std::pair<int, int> const & from, std::pair<int, int> const & to);
-
-    Tile const & get (std::pair<int, int> const & where) const;
     void capture(std::pair<int, int> const & where) const;
-
-    void reset();
-    Player getCurrentPlayer() const;
+    void fill(Tile pawn, std::vector<int> const & range);
 
 private:
 
-    // Checks the closest opponents pawn and returns position
+    /// Given 2 positions calculates the difference between them taking into account
+    /// the direction, in which current player can move. In result for white positive value of
+    /// e.g. row means moving to the top, whereas for black it is moving to the bottom.
+    [[nodiscard]] std::pair<int, int> getRelativeDisplacement(std::pair<int, int> from, std::pair<int, int> to) const;
+
+    // Checks the closest opponents pawn on diagonal and returns position
     // behind it if it is not taken by some other pawn. If there is more than
-    // one such positions returns more.
-    std::vector<std::pair<int, int>> getClosestOpponentsPawns(std::pair<int, int> const & position) const;
+    // one such positions returns all of them.
+    [[nodiscard]] std::vector<std::pair<int, int>> getClosestOpponentsPawns(std::pair<int, int> const & position) const;
 
-    // Uses `getClosestOpponentsPawns` recursively with certain rules to find the path
-    // between the target position and current pawns position during jump beating.
-    void processCapturePaths(PathTree & tree,
-                             std::shared_ptr<PathTree::Leaf> const & start,
-                             std::pair<int, int> const & position,
-                             std::pair<int, int> const & target) const;
+    // Recursively calls itself with certain rules to explore all the paths
+    // between the target position and current pawns position during jump capture of opponents pawns.
+    void processCapturedPaths(std::vector<std::vector<std::pair<int, int>>> & paths,
+                              std::vector<std::pair<int, int>> & uniques,
+                              std::pair<int, int> const & position,
+                              std::pair<int, int> const & target) const;
 
-    // Returns vector of positions, which contain beaten opponents pawns during the jumping process.
+    // Returns a vector of positions, which contain captured opponents pawns during the jumping process.
     // If returned vector is empty, it means that the move is illegal.
-    std::vector<std::pair<int, int>> processCapturingOpponentsPawns(std::pair<int, int> const & from,
+    [[nodiscard]] std::vector<std::pair<int, int>> processCapturingOpponentsPawns(std::pair<int, int> const & from,
                                                                     std::pair<int, int> const & to) const;
-
 
 
 private:
@@ -93,7 +91,6 @@ private:
     Player m_current;
     int m_whiteAmount;
     int m_blackAmount;
-    Settings &m_settings;
 };
 
 #endif //UTP_GAME_PROJECT_LOGIC_GAME_H

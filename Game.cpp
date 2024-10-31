@@ -2,17 +2,17 @@
 // Created by Kuuba Puacz on 22/10/2024.
 //
 
-#include <ranges>
 #include <iostream>
+#include <math.h>
 #include "Game.h"
 
+
 ////////////////////////////////////////////////
-//////////// HELPER FUNCTIONS
+////////////////////////////////////////////////
+/// Helper Functions
+////////////////////////////////////////////////
 ////////////////////////////////////////////////
 
-bool isInClosed(int value, std::pair<int, int> const & range) {
-    return value <= range.second && value >= range.first;
-}
 
 auto operator + (std::pair<int, int> const & left,
                                 std::pair<int, int> const & right) {
@@ -44,43 +44,16 @@ auto operator / (std::pair<int, int> const & position, int value) {
     return std::pair<int, int>{position.first / value, position.second / value};
 }
 
+
 ////////////////////////////////////////////////
 ////////////////////////////////////////////////
+/// Class Member Helpers
+////////////////////////////////////////////////
 ////////////////////////////////////////////////
 
-
-Game::Game(Settings & settings, int size): m_settings(settings) {
-    // Init the board
-    m_data = std::vector<std::unique_ptr<std::vector<Tile>>>();
-    for (auto i = 0; i < size; i++) {
-        auto row = std::make_unique<std::vector<Tile>>(10, Tile::Blank);
-        m_data.push_back(std::move(row));
-    }
-    m_current = Game::Player::White;
-    m_blackAmount = 12;
-    m_whiteAmount = 12;
-
-    // Filling board
-    auto totalAmount = size * size;
-    auto pawnTilesAmount = 24; // amount of tiles with possibility of having a pawn
-    auto indices = std::vector<int>(pawnTilesAmount);
-    for (auto i = 0; i < indices.size(); i++) indices[i] = i;
-    fill(Tile::BlackPawn, indices);
-    std::ranges::reverse(indices);
-    std::ranges::transform(indices, indices.begin(),
-                           [totalAmount, pawnTilesAmount](int i)
-                           { return i + totalAmount - pawnTilesAmount; });
-    fill(Tile::WhitePawn, indices);
-}
-
-void Game::fill(Game::Tile pawn, std::vector<int> const & range) {
-    for (auto i : range) {
-        auto condition = (i + i / m_data.size()) % 2 == 1;
-        if (condition) m_data[i / m_data.size()]->at(i % m_data.size()) = pawn;
-    }
-}
 
 Game::Tile const & Game::get(std::pair<int, int> const & where) const {
+    if (!hasPosition(where)) throw std::runtime_error("Tried to access incorrect position of the board.");
     return m_data[where.first]->at(where.second);
 }
 
@@ -106,24 +79,17 @@ bool Game::isFree(std::pair<int, int> const & position) const {
 }
 
 bool Game::isSingleMoveForward(const std::pair<int, int> &displacement) const {
-    return isInClosed(displacement.first, {0, 1}) &&
-           (displacement.second == -1 || displacement.second == 1);
+    return displacement.first == 1 && (displacement.second == -1 || displacement.second == 1);
 }
 
 bool Game::isQueenTransformation(const std::pair<int, int> &to) const {
-    if (m_current == Game::Player::White) {
-        if (to.first == 0 && !m_settings.isBoardInverted) return true;
-        if (to.first == m_data.size() - 1 && m_settings.isBoardInverted) return true;
-    } else {
-        if (to.first == 0 && m_settings.isBoardInverted) return true;
-        if (to.first == m_data.size() - 1 && !m_settings.isBoardInverted) return true;
-    }
+    if (m_current == Game::Player::White && to.first == 0) return true;
+    else if (to.first == m_data.size() - 1) return true;
     return false;
 }
 
 std::pair<int, int> Game::getRelativeDisplacement(std::pair<int, int> from, std::pair<int, int> to) const {
-    auto isWhite = m_current == Game::Player::White;
-    if ((isWhite && !m_settings.isBoardInverted) || (!isWhite && m_settings.isBoardInverted))
+    if (m_current == Game::Player::White)
         return {from.first - to.first, from.second - to.second};
     else
         return {to.first - from.first, to.second - from.second};
@@ -136,16 +102,87 @@ Game::Player Game::getPawnColor(std::pair<int, int> const & position) const {
     else return Player::None;
 }
 
-Game::Tile Game::getCurrentPawn() const {
-    if (m_current == Game::Player::White) return Game::Tile::WhitePawn;
-    else if (m_current == Game::Player::Black) return Game::Tile::BlackPawn;
-    else return Game::Tile::Blank;
-}
-
 Game::Tile Game::getCurrentQueen() const {
     if (m_current == Game::Player::White) return Game::Tile::WhiteQueen;
     else if (m_current == Game::Player::Black) return Game::Tile::BlackQueen;
     else return Game::Tile::Blank;
+}
+
+Game::Player Game::getCurrentPlayer() const {
+    return m_current;
+}
+
+Game::Player Game::getOpponent() const {
+    return m_current == Player::White ? Player::Black : Player::White;
+}
+
+int Game::getBlackPawnsAmount() const {
+    return m_blackAmount;
+}
+
+int Game::getWhitePawnsAmount() const {
+    return m_whiteAmount;
+}
+
+
+////////////////////////////////////////////////
+////////////////////////////////////////////////
+/// Class Main Functionality
+////////////////////////////////////////////////
+////////////////////////////////////////////////
+
+
+Game::Game() {
+    // Init the board
+    m_data = std::vector<std::unique_ptr<std::vector<Tile>>>();
+    auto size = 8;
+    for (auto i = 0; i < size; i++) {
+        auto row = std::make_unique<std::vector<Tile>>(10, Tile::Blank);
+        m_data.push_back(std::move(row));
+    }
+    m_current = Game::Player::White;
+    m_blackAmount = 12;
+    m_whiteAmount = 12;
+
+    // Filling board
+    auto totalAmount = size * size;
+    auto pawnTilesAmount = 24; // amount of tiles with possibility of having a pawn
+    auto indices = std::vector<int>(pawnTilesAmount);
+    for (auto i = 0; i < indices.size(); i++) indices[i] = i;
+    fill(Tile::BlackPawn, indices);
+    std::ranges::reverse(indices);
+    std::ranges::transform(indices, indices.begin(),
+                           [totalAmount, pawnTilesAmount](int i)
+                           { return i + totalAmount - pawnTilesAmount; });
+    fill(Tile::WhitePawn, indices);
+}
+
+Game::Game(const std::vector<Game::Tile> &state, Player const& currentPlayer)
+: m_current(currentPlayer) {
+    // Init the board
+    m_data = std::vector<std::unique_ptr<std::vector<Tile>>>();
+    auto size = static_cast<int>(sqrt(static_cast<double>(state.size())));
+    if (size * size != state.size()) throw std::runtime_error("GameState module was given a flat state of "
+                                                              "incorrect size.");
+    m_blackAmount = 0;
+    m_whiteAmount = 0;
+    for (auto i = 0; i < size; i++) {
+        auto row = std::make_unique<std::vector<Tile>>();
+        for (int j = 0; j < size; j++) {
+            auto tile = state[i * size + j];
+            row->push_back(tile);
+            if (tile == Game::Tile::BlackPawn || tile == Game::Tile::BlackQueen) m_blackAmount++;
+            else if (tile == Game::Tile::WhitePawn || tile == Game::Tile::WhiteQueen) m_whiteAmount++;
+        }
+        m_data.push_back(std::move(row));
+    }
+}
+
+void Game::fill(Game::Tile pawn, std::vector<int> const & range) {
+    for (auto i : range) {
+        auto condition = (i + i / m_data.size()) % 2 == 1;
+        if (condition) m_data[i / m_data.size()]->at(i % m_data.size()) = pawn;
+    }
 }
 
 Game::MoveResult Game::process(std::pair<int, int> const & from, std::pair<int, int> const & to) {
@@ -192,12 +229,13 @@ Game::MoveResult Game::process(std::pair<int, int> const & from, std::pair<int, 
     for (auto & p : result.takenPawns) capture(p);
 
     // Subtract taken pawns
-    if (m_current == Game::Player::White) m_whiteAmount -= static_cast<int>(result.takenPawns.size());
-    else m_blackAmount -= static_cast<int>(result.takenPawns.size());
+    if (m_current == Game::Player::White)
+        m_blackAmount -= static_cast<int>(result.takenPawns.size());
+    else m_whiteAmount -= static_cast<int>(result.takenPawns.size());
 
     // Check if someone has won
-    if (m_whiteAmount == 0) result.winner = Game::Player::White;
-    else if (m_blackAmount == 0) result.winner = Game::Player::Black;
+    if (m_whiteAmount == 0) result.winner = Game::Player::Black;
+    else if (m_blackAmount == 0) result.winner = Game::Player::White;
 
     // Updating the state
     m_data[to.first]->at(to.second) = m_data[from.first]->at(from.second);
@@ -221,7 +259,7 @@ void Game::processPawn(MoveResult & result, const std::pair<int, int> &from,
     // Action specific checking
     if (isSingleMoveForward(displacement)) {
         // Check if tile is not occupied (notice that tile is assured not to be blank thanks
-        // to previous checks.
+        // to previous checks).
         result.isCorrect = true;
         return;
     }
@@ -253,22 +291,33 @@ void Game::processQueen(MoveResult & result, std::pair<int, int> const & from,
     auto step = std::pair<int, int>{displacement.first / abs(displacement.first),
                                     displacement.second / abs(displacement.second)};
     auto position = to - step;
-    if (getPawnColor(position) == m_current) {
+    if (position != from && getPawnColor(position) == m_current) {
         result.message = "Invalid move. When queen moves on further diagonal it can take at most "
-                         "one pawn, which is right behind her final position.";
+                         "one pawn, which is right behind her final position. It can't move behind "
+                         "its own pawns.";
         return;
     }
 
-    // Making sure there are no other pawns in the way of diagonal move
+    // If it was single move then terminate
+    if (position == from) {
+        result.isCorrect = true;
+        return;
+    }
+
+    // Making sure there are no other pawns in the way of diagonal move if such occurred
     while ((position = position - step) != from) {
         if (!isFree(position)) {
             result.message = "Invalid move. When queen moves on further diagonal it can take at most "
-                             "one pawn, which is right behind her final position.";
+                             "one pawn, which is right behind her final position. The rest of the diagonal "
+                             "ought to be free.";
             return;
         }
     }
+
+    // If the place behind destination was an opponent pawn then it is captured
+    if (getPawnColor(to - step) == getOpponent())
+        result.takenPawns = std::vector<std::pair<int, int>>{to - step};
     result.isCorrect = true;
-    result.takenPawns = std::vector<std::pair<int, int>>{to - step};
 }
 
 std::vector<std::pair<int, int>> Game::getClosestOpponentsPawns(std::pair<int, int> const & position) const {
@@ -293,86 +342,60 @@ std::vector<std::pair<int, int>> Game::getClosestOpponentsPawns(std::pair<int, i
     return newPositions;
 }
 
-void Game::processCapturePaths(PathTree & tree,
-                               std::shared_ptr<PathTree::Leaf> const & start,
-                               std::pair<int, int> const & position,
-                               std::pair<int, int> const & target) const {
+void Game::processCapturedPaths(std::vector<std::vector<std::pair<int, int>>> & paths,
+                                std::vector<std::pair<int, int>> & uniques,
+                                std::pair<int, int> const & position,
+                                std::pair<int, int> const & target) const {
     auto positions = getClosestOpponentsPawns(position);
-    std::cout << "Processing position " << position.first << " " << position.second <<  "...\n";
     for (auto const & p : positions) {
 
         // Else creating more branches out of this position using recursion
-        std::cout << "Adding new leaf..\n";
-        auto leaf = std::make_shared<PathTree::Leaf>(nullptr, p);
-        tree.addLeaf(leaf);
+        paths.back().push_back(p);
 
         // If reached the proper end of the tree store it and create new branch from start position.
         if (p.first == target.first && p.second == target.second) {
-            std::cout << "Adding new branch..\n";
-            tree.addBranch(start);
+            paths.push_back(paths.back());
+            paths.back().pop_back();
+            uniques.push_back(p);
             continue;
         }
 
         // If this position is taken by an opponent or a repetition of some previous positions then cut the branch
-        if (!hasPosition(p) || !isFree(p) || !tree.isUnique(p)) {
-            std::cout << "Killing new branch..\n";
-            tree.killBranch();
-            tree.addBranch(start);
+        if (!hasPosition(p) || !isFree(p) || std::ranges::find(uniques, p) != uniques.end()) {
+            paths.back().pop_back();
+            uniques.push_back(p);
             continue;
         }
 
-        tree.addUnique(p);
-        processCapturePaths(tree, leaf, p, target);
+        uniques.push_back(p);
+        processCapturedPaths(paths, uniques, p, target);
+        paths.back().pop_back();
     }
 }
 
 std::vector<std::pair<int, int>> Game::processCapturingOpponentsPawns(std::pair<int, int> const & from,
                                                                 std::pair<int, int> const & to) const {
-    // Finding path, which user could have thought as a way
-    // to jump move and take some of the opponent's pawns
-    auto startLeaf = std::make_shared<PathTree::Leaf>(nullptr, to);
-    auto tree = PathTree(startLeaf);
-    processCapturePaths(tree, startLeaf, to, from);
+    // Finding paths, which user could have used as a way
+    // to jump and take some of the opponent's pawns
+    auto paths = std::vector<std::vector<std::pair<int, int>>>();
+    auto uniques = std::vector<std::pair<int, int>>();
+    paths.push_back(std::vector<std::pair<int, int>>{from});
+    processCapturedPaths(paths, uniques, from, to);
 
-    // If there are no results, the move is incorrect
+    // If there are no resulting paths, the move is incorrect
     auto results = std::vector<std::pair<int, int>>();
-    if (tree.getSize() == 0) return results;
-    auto positions = tree.getTraceOf(0);
-    std::cout << "Trace positions:\n";
-    for (auto & pos : positions) std::cout << pos.first << " " << pos.second << '\n';
+    if (paths.size() == 1 && paths.back().size() == 1) return results;
 
-    // If move is correct the function should return the taken opponent's pawns as result
+    // Assumes the best case scenario of the pawns capturing, which is the longest one
+    std::ranges::sort(paths, std::ranges::less(), [](auto vector){ return vector.size(); });
+    auto positions = paths.back();
+
+    // If move is correct the function should return the taken opponent's pawns positions as a result
+    // thus the jump path positions are transformed into the opponents pawns positions
     auto directions = std::vector<std::pair<int, int>>();
     for (int i = 0; i < positions.size() - 1; i++) directions.push_back(positions[i + 1] - positions[i]);
     std::ranges::transform(directions, directions.begin(), [](auto d){ return d / 2; });
     for (int i = 0; i < directions.size(); i++) positions[i] += directions[i];
     positions.pop_back(); // last position does not hold taken pawn place here
     return positions;
-}
-
-void Game::reset() {
-    // Init the board
-    m_data.clear();
-    for (auto & row : m_data) {
-        for (auto &tile: *row) tile = Game::Tile::Blank;
-    }
-    m_current = Game::Player::White;
-    m_blackAmount = 12;
-    m_whiteAmount = 12;
-
-    // Filling board
-    auto totalAmount = m_data.size() * m_data.size();
-    auto pawnTilesAmount = 24; // amount of tiles with possibility of having a pawn
-    auto indices = std::vector<int>(pawnTilesAmount);
-    for (auto i = 0; i < indices.size(); i++) indices[i] = i;
-    fill(Tile::BlackPawn, indices);
-    std::ranges::reverse(indices);
-    std::ranges::transform(indices, indices.begin(),
-                           [totalAmount, pawnTilesAmount](int i)
-                           { return i + totalAmount - pawnTilesAmount; });
-    fill(Tile::WhitePawn, indices);
-}
-
-Game::Player Game::getCurrentPlayer() const {
-    return m_current;
 }

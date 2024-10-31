@@ -7,7 +7,7 @@
 namespace java {
 
     ///////////////////////////////////////////////////////
-    /// Enumerations global mappings
+    /// Global mappings
     ///////////////////////////////////////////////////////
 
 
@@ -48,6 +48,17 @@ namespace java {
         return {env->GetIntField(pos, row), env->GetIntField(pos, col)};
     }
 
+    Game::Tile tileToCpp(JNIEnv *env, jobject const &tile) {
+        auto cls = env->GetObjectClass(tile);
+        auto method = env->GetMethodID(cls, "name", "()Ljava/lang/String;");
+        auto nameRaw = (jstring) env->CallObjectMethod(tile, method);
+        auto name = std::string(env->GetStringUTFChars(nameRaw, nullptr));
+
+        auto mapping = g_mappingTile;
+        auto it = std::find_if(mapping.begin(), mapping.end(), [name](auto pair){ return pair.second == name; });
+        return it->first;
+    }
+
 
     ///////////////////////////////////////////////////////
     /// Conversions from C++ to Java
@@ -55,30 +66,30 @@ namespace java {
 
 
     jobject positionToJava(JNIEnv *env, std::pair<int, int> const &pos) {
-        auto cls = env->FindClass("GamePosition");
+        auto cls = env->FindClass("main/GamePosition");
         auto constructor = env->GetMethodID(cls, "<init>", "(II)V");
         auto object = env->NewObject(cls, constructor, pos.first, pos.second);
         return object;
     }
 
     jobject tileToJava(JNIEnv *env, Game::Tile const &tile) {
-        auto cls = env->FindClass("GamePawnType");
-        auto field = env->GetStaticFieldID(cls, g_mappingTile.at(tile).c_str(), "LGamePawnType;");
+        auto cls = env->FindClass("main/GamePawnType");
+        auto field = env->GetStaticFieldID(cls, g_mappingTile.at(tile).c_str(), "Lmain/GamePawnType;");
         return env->GetStaticObjectField(cls, field);
 
     }
 
     jobject playerToJava(JNIEnv *env, Game::Player const &player) {
-        auto cls = env->FindClass("GamePlayerType");
-        auto field = env->GetStaticFieldID(cls, g_mappingPlayer.at(player).c_str(), "LGamePlayerType;");
+        auto cls = env->FindClass("main/GamePlayerType");
+        auto field = env->GetStaticFieldID(cls, g_mappingPlayer.at(player).c_str(), "Lmain/GamePlayerType;");
         return env->GetStaticObjectField(cls, field);
     }
 
     jobject resultsToJava(JNIEnv * env, Game::MoveResult const &results) {
-        auto cls = env->FindClass("GameMoveResult");
-        auto constructor = env->GetMethodID(cls, "<init>", "(ZZ[LGamePosition;LGamePlayerType;Ljava/lang/String;)V");
+        auto cls = env->FindClass("main/GameMoveResult");
+        auto constructor = env->GetMethodID(cls, "<init>", "(ZZ[Lmain/GamePosition;Lmain/GamePlayerType;Ljava/lang/String;)V");
         auto array = env->NewObjectArray(static_cast<jsize>(results.takenPawns.size()),
-                                         env->FindClass(("GamePosition")), nullptr);
+                                         env->FindClass(("main/GamePosition")), nullptr);
         for (auto i = 0; i < results.takenPawns.size(); i++)
             env->SetObjectArrayElement(array, i, positionToJava(env, results.takenPawns[i]));
         return env->NewObject(
@@ -89,6 +100,14 @@ namespace java {
              playerToJava(env, results.winner),
              env->NewStringUTF(results.message.c_str())
         );
+    }
+
+    std::vector<jobject> readJavaArray(JNIEnv * env, jobjectArray const &array) {
+        auto objects = std::vector<jobject>();
+        for (auto i = 0; i < env->GetArrayLength(array); i++) {
+            objects.push_back(env->GetObjectArrayElement(array, i));
+        }
+        return objects;
     }
 
 }
